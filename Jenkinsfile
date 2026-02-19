@@ -26,7 +26,16 @@ pipeline {
 
     stage('ECR Login') {
       steps {
-        sh 'aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}'
+        withCredentials([usernamePassword(
+          credentialsId: 'aws-creds',
+          usernameVariable: 'AWS_ACCESS_KEY_ID',
+          passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+        )]) {
+          sh '''
+            aws ecr get-login-password --region ${AWS_REGION} \
+            | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+          '''
+        }
       }
     }
 
@@ -39,13 +48,19 @@ pipeline {
 
     stage('Deploy to EKS') {
       steps {
-        sh '''
-          aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
-          sed "s#REPLACE_IMAGE#${IMAGE_URI}#g" k8s/deployment.yaml | kubectl apply -f -
-          kubectl apply -f k8s/service.yaml
-          kubectl apply -f k8s/ingress.yaml
-          kubectl rollout status deployment/tomcat-app
-        '''
+        withCredentials([usernamePassword(
+          credentialsId: 'aws-creds',
+          usernameVariable: 'AWS_ACCESS_KEY_ID',
+          passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+        )]) {
+          sh '''
+            aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+            sed "s#REPLACE_IMAGE#${IMAGE_URI}#g" k8s/deployment.yaml | kubectl apply -f -
+            kubectl apply -f k8s/service.yaml
+            kubectl apply -f k8s/ingress.yaml
+            kubectl rollout status deployment/tomcat-app
+          '''
+        }
       }
     }
   }
